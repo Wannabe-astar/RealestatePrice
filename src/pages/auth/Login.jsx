@@ -28,14 +28,25 @@ const Login = () => {
     setLoading(true)
 
     try {
-      const { error } = await signIn(formData.email, formData.password)
+      const { data, error } = await signIn(formData.email, formData.password)
       if (error) {
-        setError('로그인에 실패했습니다. 이메일과 비밀번호를 확인해주세요.')
+        console.error('Login error:', error)
+
+        // 구체적인 에러 메시지 표시
+        if (error.message.includes('Invalid login credentials')) {
+          setError('이메일 또는 비밀번호가 올바르지 않습니다.')
+        } else if (error.message.includes('Email not confirmed')) {
+          setError('이메일 인증이 필요합니다. 이메일을 확인해주세요.')
+        } else {
+          setError(`로그인 실패: ${error.message}`)
+        }
       } else {
+        console.log('Login success:', data)
         navigate('/')
       }
     } catch (err) {
-      setError('로그인 중 오류가 발생했습니다.')
+      console.error('Login exception:', err)
+      setError('로그인 중 오류가 발생했습니다: ' + err.message)
     } finally {
       setLoading(false)
     }
