@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuthContext } from '../../contexts/AuthContext'
 import Button from '../../components/Button'
@@ -14,6 +14,19 @@ const Login = () => {
   })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [envWarning, setEnvWarning] = useState(false)
+
+  useEffect(() => {
+    // 환경 변수 확인
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
+    const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+
+    if (!supabaseUrl || supabaseUrl === 'https://placeholder.supabase.co' ||
+        !supabaseKey || supabaseKey === 'placeholder-key') {
+      setEnvWarning(true)
+      setError('⚠️ Supabase 환경 변수가 설정되지 않았습니다.')
+    }
+  }, [])
 
   const handleChange = (e) => {
     setFormData({
@@ -64,7 +77,36 @@ const Login = () => {
           </p>
         </div>
 
-        {error && (
+        {envWarning && (
+          <div className="mb-4 p-4 bg-yellow-50 border border-yellow-300 rounded-lg">
+            <h3 className="text-lg font-semibold text-yellow-800 mb-2">
+              🔧 환경 설정이 필요합니다
+            </h3>
+            <p className="text-base text-yellow-700 mb-3">
+              Supabase 환경 변수가 설정되지 않았습니다.
+            </p>
+            <div className="bg-white p-3 rounded border border-yellow-200 mb-3">
+              <p className="text-sm font-mono text-gray-700 mb-2">
+                1. 프로젝트 루트에 <code className="bg-gray-100 px-1">.env</code> 파일 생성
+              </p>
+              <p className="text-sm font-mono text-gray-700 mb-2">
+                2. 다음 내용 추가:
+              </p>
+              <pre className="text-xs bg-gray-100 p-2 rounded overflow-x-auto">
+{`VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your-anon-key`}
+              </pre>
+              <p className="text-sm font-mono text-gray-700 mt-2">
+                3. 개발 서버 재시작: <code className="bg-gray-100 px-1">npm run dev</code>
+              </p>
+            </div>
+            <p className="text-sm text-yellow-700">
+              자세한 내용은 <code className="bg-yellow-100 px-1">SETUP.md</code> 파일을 참고하세요.
+            </p>
+          </div>
+        )}
+
+        {error && !envWarning && (
           <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
             <p className="text-base text-error">{error}</p>
           </div>
@@ -94,10 +136,10 @@ const Login = () => {
           <Button
             type="submit"
             variant="primary"
-            disabled={loading}
+            disabled={loading || envWarning}
             className="w-full mt-2"
           >
-            {loading ? '로그인 중...' : '로그인'}
+            {envWarning ? '환경 설정 필요' : (loading ? '로그인 중...' : '로그인')}
           </Button>
         </form>
 
