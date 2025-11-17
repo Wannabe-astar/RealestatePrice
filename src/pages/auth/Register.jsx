@@ -41,15 +41,26 @@ const Register = () => {
     setLoading(true)
 
     try {
-      const { error } = await signUp(formData.email, formData.password, formData.fullName)
+      const { data, error } = await signUp(formData.email, formData.password, formData.fullName)
       if (error) {
-        setError('회원가입에 실패했습니다. 다시 시도해주세요.')
+        console.error('Register error:', error)
+
+        // 구체적인 에러 메시지 표시
+        if (error.message.includes('already registered')) {
+          setError('이미 가입된 이메일입니다.')
+        } else if (error.message.includes('password')) {
+          setError('비밀번호는 최소 6자 이상이어야 합니다.')
+        } else {
+          setError(`회원가입 실패: ${error.message}`)
+        }
       } else {
+        console.log('Register success:', data)
         alert('회원가입이 완료되었습니다. 로그인해주세요.')
         navigate('/login')
       }
     } catch (err) {
-      setError('회원가입 중 오류가 발생했습니다.')
+      console.error('Register exception:', err)
+      setError('회원가입 중 오류가 발생했습니다: ' + err.message)
     } finally {
       setLoading(false)
     }
