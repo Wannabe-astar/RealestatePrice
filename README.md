@@ -46,16 +46,29 @@ npm install
 ```
 
 3. 환경 변수 설정
-`.env.example` 파일을 `.env`로 복사하고 Supabase 정보를 입력하세요:
+
+**중요**: Vite는 `VITE_` 접두사가 필요합니다!
+
 ```bash
+# .env.example을 .env로 복사
 cp .env.example .env
 ```
 
-`.env` 파일 내용:
+`.env` 파일을 열고 실제 Supabase 정보를 입력하세요:
+```env
+VITE_SUPABASE_URL=https://your-project-id.supabase.co
+VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 ```
-VITE_SUPABASE_URL=your_supabase_url
-VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
-```
+
+**Supabase 정보 찾기:**
+1. https://supabase.com/dashboard 접속
+2. 프로젝트 선택
+3. Settings → API
+4. Project URL과 anon public key 복사
+
+**⚠️ 주의**:
+- `SUPABASE_URL` ❌ → `VITE_SUPABASE_URL` ✅
+- `SUPABASE_ANON_KEY` ❌ → `VITE_SUPABASE_ANON_KEY` ✅
 
 4. 개발 서버 실행
 ```bash
