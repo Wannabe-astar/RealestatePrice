@@ -1,0 +1,31 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-background text-text-primary font-sans;
+  }
+}
+
+/* 중장년층을 위한 큰 글씨 및 터치 영역 */
+@layer components {
+  .btn-large {
+    @apply min-h-[52px] px-6 py-3 text-lg font-semibold rounded-lg;
+  }
+
+  .input-large {
+    @apply min-h-[52px] px-4 py-3 text-lg border rounded-lg;
+  }
+
+  /* 모바일에서 더 큰 터치 영역 */
+  @media (max-width: 640px) {
+    .btn-large {
+      @apply min-h-[48px] w-full text-base;
+    }
+
+    .input-large {
+      @apply min-h-[48px] text-base;
+    }
+  }
+}
