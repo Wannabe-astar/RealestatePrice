@@ -1,6 +1,12 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useCallback } from 'react'
 import { useAuthContext } from '../contexts/AuthContext'
-import { supabase } from '../lib/supabaseClient'
+import { useToast } from '../contexts/ToastContext'
+import { useDataFetch } from '../hooks/useDataFetch'
+import { useForm } from '../hooks/useForm'
+import { getUserProperties, createEntity, updateEntity, deleteEntity } from '../services/supabaseService'
+import { validateRequired, validateAddress, validatePrice, validateRange, validateDate } from '../utils/validation'
+import { formatPrice, formatDate, formatArea } from '../utils/formatting'
+import { tryCatch } from '../utils/errorHandling'
 import { Plus, Trash2, Edit2, Home as HomeIcon } from 'lucide-react'
 import Card from '../components/Card'
 import Button from '../components/Button'
@@ -10,141 +16,127 @@ import Loading from '../components/Loading'
 
 const PropertyManagement = () => {
   const { user } = useAuthContext()
-  const [properties, setProperties] = useState([])
-  const [loading, setLoading] = useState(true)
+  const toast = useToast()
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingProperty, setEditingProperty] = useState(null)
-  const [formData, setFormData] = useState({
-    address: '',
-    area: '',
-    purchase_price: '',
-    purchase_date: '',
-    property_type: 'apartment'
-  })
-  const [error, setError] = useState('')
 
-  useEffect(() => {
-    if (user) {
-      fetchProperties()
+  // Fetch properties using custom hook
+  const {
+    data: properties,
+    loading,
+    error: fetchError,
+    refetch
+  } = useDataFetch(
+    () => getUserProperties(user?.id),
+    [user?.id],
+    {
+      onError: (err) => toast.error('부동산 목록을 불러오는데 실패했습니다.')
     }
-  }, [user])
+  )
 
-  const fetchProperties = async () => {
-    try {
-      setLoading(true)
-      const { data, error } = await supabase
-        .from('user_properties')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-
-      if (error) throw error
-      setProperties(data || [])
-    } catch (err) {
-      console.error('Error fetching properties:', err)
-      setError('부동산 목록을 불러오는데 실패했습니다.')
-    } finally {
-      setLoading(false)
-    }
+  // Form validation schema
+  const validationSchema = {
+    address: [validateRequired, validateAddress],
+    area: [
+      validateRequired,
+      (value) => validateRange(parseFloat(value), 0.1, 10000, '면적')
+    ],
+    purchase_price: [
+      validateRequired,
+      (value) => validatePrice(parseFloat(value), 100)
+    ],
+    purchase_date: [validateRequired, validateDate],
+    property_type: [validateRequired]
   }
 
-  const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    })
-  }
-
-  const handleSubmit = async (e) => {
-    e.preventDefault()
-    setError('')
-
-    try {
-      const propertyData = {
-        ...formData,
-        area: parseFloat(formData.area),
-        purchase_price: parseFloat(formData.purchase_price),
-        user_id: user.id
-      }
-
-      if (editingProperty) {
-        const { error } = await supabase
-          .from('user_properties')
-          .update(propertyData)
-          .eq('id', editingProperty.id)
-
-        if (error) throw error
-      } else {
-        const { error } = await supabase
-          .from('user_properties')
-          .insert([propertyData])
-
-        if (error) throw error
-      }
-
-      setIsModalOpen(false)
-      setEditingProperty(null)
-      setFormData({
-        address: '',
-        area: '',
-        purchase_price: '',
-        purchase_date: '',
-        property_type: 'apartment'
-      })
-      fetchProperties()
-    } catch (err) {
-      console.error('Error saving property:', err)
-      setError('부동산 저장에 실패했습니다.')
-    }
-  }
-
-  const handleEdit = (property) => {
-    setEditingProperty(property)
-    setFormData({
-      address: property.address,
-      area: property.area.toString(),
-      purchase_price: property.purchase_price.toString(),
-      purchase_date: property.purchase_date,
-      property_type: property.property_type
-    })
-    setIsModalOpen(true)
-  }
-
-  const handleDelete = async (id) => {
-    if (!window.confirm('정말 삭제하시겠습니까?')) return
-
-    try {
-      const { error } = await supabase
-        .from('user_properties')
-        .delete()
-        .eq('id', id)
-
-      if (error) throw error
-      fetchProperties()
-    } catch (err) {
-      console.error('Error deleting property:', err)
-      alert('부동산 삭제에 실패했습니다.')
-    }
-  }
-
-  const openAddModal = () => {
-    setEditingProperty(null)
-    setFormData({
+  // Form handling with custom hook
+  const form = useForm(
+    {
       address: '',
       area: '',
       purchase_price: '',
       purchase_date: '',
       property_type: 'apartment'
+    },
+    validationSchema,
+    async (values) => {
+      await handleFormSubmit(values)
+    }
+  )
+
+  const handleFormSubmit = async (values) => {
+    const propertyData = {
+      address: values.address,
+      area: parseFloat(values.area),
+      purchase_price: parseFloat(values.purchase_price),
+      purchase_date: values.purchase_date,
+      property_type: values.property_type,
+      user_id: user.id
+    }
+
+    const [result, error] = await tryCatch(async () => {
+      if (editingProperty) {
+        return await updateEntity('user_properties', editingProperty.id, propertyData)
+      } else {
+        return await createEntity('user_properties', propertyData)
+      }
     })
+
+    if (error) {
+      toast.error(editingProperty ? '부동산 수정에 실패했습니다.' : '부동산 등록에 실패했습니다.')
+      return
+    }
+
+    if (result?.error) {
+      toast.error(result.error.message || '오류가 발생했습니다.')
+      return
+    }
+
+    toast.success(editingProperty ? '부동산이 수정되었습니다.' : '부동산이 등록되었습니다.')
+    setIsModalOpen(false)
+    setEditingProperty(null)
+    form.resetForm()
+    refetch()
+  }
+
+  const handleEdit = useCallback((property) => {
+    setEditingProperty(property)
+    form.setFieldValue('address', property.address)
+    form.setFieldValue('area', property.area.toString())
+    form.setFieldValue('purchase_price', property.purchase_price.toString())
+    form.setFieldValue('purchase_date', property.purchase_date)
+    form.setFieldValue('property_type', property.property_type)
+    setIsModalOpen(true)
+  }, [form])
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('정말 삭제하시겠습니까?')) return
+
+    const [result, error] = await tryCatch(() => deleteEntity('user_properties', id))
+
+    if (error || result?.error) {
+      toast.error('부동산 삭제에 실패했습니다.')
+      return
+    }
+
+    toast.success('부동산이 삭제되었습니다.')
+    refetch()
+  }
+
+  const openAddModal = () => {
+    setEditingProperty(null)
+    form.resetForm()
     setIsModalOpen(true)
   }
 
-  const formatPrice = (price) => {
-    return new Intl.NumberFormat('ko-KR').format(price) + '만원'
-  }
-
-  const formatDate = (date) => {
-    return new Date(date).toLocaleDateString('ko-KR')
+  const getPropertyTypeLabel = (type) => {
+    const types = {
+      apartment: '아파트',
+      house: '주택',
+      land: '토지',
+      commercial: '상가'
+    }
+    return types[type] || type
   }
 
   if (loading) {
@@ -168,7 +160,7 @@ const PropertyManagement = () => {
         </Button>
       </div>
 
-      {properties.length === 0 ? (
+      {(!properties || properties.length === 0) ? (
         <Card>
           <div className="text-center py-12">
             <HomeIcon size={64} className="mx-auto text-gray-300 mb-4" />
@@ -191,19 +183,21 @@ const PropertyManagement = () => {
                     {property.address}
                   </h3>
                   <p className="text-sm text-text-secondary">
-                    {property.property_type === 'apartment' ? '아파트' : '기타'}
+                    {getPropertyTypeLabel(property.property_type)}
                   </p>
                 </div>
                 <div className="flex gap-2">
                   <button
                     onClick={() => handleEdit(property)}
                     className="p-2 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                    aria-label="수정"
                   >
                     <Edit2 size={18} />
                   </button>
                   <button
                     onClick={() => handleDelete(property.id)}
                     className="p-2 text-red-600 hover:bg-red-50 rounded transition-colors"
+                    aria-label="삭제"
                   >
                     <Trash2 size={18} />
                   </button>
@@ -214,7 +208,7 @@ const PropertyManagement = () => {
                 <div className="flex justify-between">
                   <span className="text-text-secondary">면적:</span>
                   <span className="font-medium text-text-primary">
-                    {property.area}㎡
+                    {formatArea(property.area)}
                   </span>
                 </div>
                 <div className="flex justify-between">
@@ -226,7 +220,7 @@ const PropertyManagement = () => {
                 <div className="flex justify-between">
                   <span className="text-text-secondary">구매일:</span>
                   <span className="font-medium text-text-primary">
-                    {formatDate(property.purchase_date)}
+                    {formatDate(property.purchase_date, 'YYYY.MM.DD')}
                   </span>
                 </div>
               </div>
@@ -237,79 +231,82 @@ const PropertyManagement = () => {
 
       <Modal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        onClose={() => {
+          setIsModalOpen(false)
+          form.resetForm()
+        }}
         title={editingProperty ? '부동산 수정' : '부동산 등록'}
       >
-        {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-            <p className="text-sm text-error">{error}</p>
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={form.handleSubmit}>
           <Input
             label="주소"
-            name="address"
-            value={formData.address}
-            onChange={handleChange}
+            {...form.getFieldProps('address')}
             placeholder="서울시 강남구 ..."
+            error={form.touched.address && form.errors.address}
             required
           />
 
           <Input
             label="면적 (㎡)"
-            name="area"
             type="number"
-            value={formData.area}
-            onChange={handleChange}
+            step="0.01"
+            {...form.getFieldProps('area')}
             placeholder="85"
+            error={form.touched.area && form.errors.area}
             required
           />
 
           <Input
             label="구매가격 (만원)"
-            name="purchase_price"
             type="number"
-            value={formData.purchase_price}
-            onChange={handleChange}
+            {...form.getFieldProps('purchase_price')}
             placeholder="50000"
+            error={form.touched.purchase_price && form.errors.purchase_price}
             required
           />
 
           <Input
             label="구매일자"
-            name="purchase_date"
             type="date"
-            value={formData.purchase_date}
-            onChange={handleChange}
+            {...form.getFieldProps('purchase_date')}
+            error={form.touched.purchase_date && form.errors.purchase_date}
             required
           />
 
           <div className="mb-4">
             <label className="block text-lg font-medium text-text-primary mb-2">
-              부동산 유형
+              부동산 유형 <span className="text-error">*</span>
             </label>
             <select
-              name="property_type"
-              value={formData.property_type}
-              onChange={handleChange}
-              className="input-large w-full border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+              {...form.getFieldProps('property_type')}
+              className="input-large w-full border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 rounded-lg px-4 py-3 text-lg"
             >
               <option value="apartment">아파트</option>
               <option value="house">주택</option>
               <option value="land">토지</option>
               <option value="commercial">상가</option>
             </select>
+            {form.touched.property_type && form.errors.property_type && (
+              <p className="mt-1 text-sm text-error">{form.errors.property_type}</p>
+            )}
           </div>
 
           <div className="flex gap-3 mt-6">
-            <Button type="submit" variant="primary" className="flex-1">
-              {editingProperty ? '수정' : '등록'}
+            <Button
+              type="submit"
+              variant="primary"
+              className="flex-1"
+              disabled={form.isSubmitting}
+            >
+              {form.isSubmitting ? '처리 중...' : (editingProperty ? '수정' : '등록')}
             </Button>
             <Button
               type="button"
               variant="secondary"
-              onClick={() => setIsModalOpen(false)}
+              onClick={() => {
+                setIsModalOpen(false)
+                form.resetForm()
+              }}
               className="flex-1"
             >
               취소

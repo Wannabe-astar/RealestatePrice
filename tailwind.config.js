@@ -13,7 +13,11 @@ export default {
         'text-primary': '#1E293B',
         'text-secondary': '#475569',
         'error': '#DC2626',
+        'error-light': '#FEE2E2',
+        'error-dark': '#991B1B',
         'success': '#16A34A',
+        'success-light': '#DCFCE7',
+        'success-dark': '#166534',
         'warning': '#D97706',
         'border': '#E2E8F0',
         'card-background': '#FFFFFF'
@@ -25,6 +29,15 @@ export default {
         '18': '4.5rem',
         '88': '22rem',
         '128': '32rem'
+      },
+      keyframes: {
+        slideIn: {
+          '0%': { transform: 'translateX(100%)', opacity: '0' },
+          '100%': { transform: 'translateX(0)', opacity: '1' }
+        }
+      },
+      animation: {
+        slideIn: 'slideIn 0.3s ease-out'
       }
     }
   },
